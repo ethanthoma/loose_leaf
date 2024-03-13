@@ -1,0 +1,3 @@
+[submodule "teashop"]
+	path = teashop
+	url = ./teashop/
