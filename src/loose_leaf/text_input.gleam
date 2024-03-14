@@ -27,6 +27,7 @@ fn default_key_map() -> KeyMap {
 pub type Model {
   Model(
     prompt: String,
+    place_holder: String,
     cursor: cursor.Model,
     char_limit: Int,
     key_map: KeyMap,
@@ -38,34 +39,45 @@ pub type Model {
 }
 
 pub fn new() {
-  Model("> ", cursor.new(), 0, default_key_map(), "", 0, 0, 0)
+  Model(
+    "> ",
+    "green tea",
+    cursor.initial_model(),
+    0,
+    default_key_map(),
+    "",
+    0,
+    0,
+    0,
+  )
 }
 
 pub fn update(model: Model, event) {
-  let #(model, event) = case event {
+  let model = case event {
     event.Key(key) ->
       case result.unwrap(dict.get(model.key_map, key), "") {
-        "character_forward" -> #(character_forward(model), event)
-        "character_backward" -> #(character_backward(model), event)
-        "delete_character_backward" -> #(
-          delete_character_backward(model),
-          event,
-        )
+        "character_forward" -> character_forward(model)
+        "character_backward" -> character_backward(model)
+        "delete_character_backward" -> delete_character_backward(model)
         "" -> {
           let model = case key {
             key.Char(char) -> {
               insert_character(model, char)
             }
-            _ -> model
+            _otherwise -> model
           }
-          #(model, event)
+          model
         }
-        _otherwise -> #(model, event)
+        _otherwise -> model
       }
-    _otherwise -> #(model, event)
+    _otherwise -> model
   }
 
-  #(handle_overflow(model), event)
+  let #(cursor, command) = cursor.update(model.cursor, event)
+  let model = Model(..model, cursor: cursor)
+  let model = handle_overflow(model)
+
+  #(model, command)
 }
 
 fn character_forward(model: Model) {
@@ -116,23 +128,35 @@ fn set_cursor(model: Model, position) {
 }
 
 pub fn view(model: Model) {
-  let value =
-    string.slice(model.value, model.offset, model.offset_right - model.offset)
-  let position = int.max(0, model.position - model.offset)
-  let view = string.slice(value, 0, position)
-
-  model.prompt
-  <> case position < string.length(value) {
-    True -> {
-      let char = string.slice(value, position, 1)
-      let c = cursor.set_char(model.cursor, char)
-      view
-      <> cursor.view(c)
-      <> string.slice(value, position + 1, string.length(value))
-    }
+  case string.length(model.value) == 0 && model.place_holder != "" {
+    True -> place_holder_view(model)
     False -> {
-      let c = cursor.set_char(model.cursor, " ")
-      view <> cursor.view(c)
+      let value = string.slice(model.value, model.offset, model.offset_right)
+      let position = int.max(0, model.position - model.offset)
+      let view = string.slice(value, 0, position)
+
+      model.prompt
+      <> case position < string.length(value) {
+        True -> {
+          let char = string.slice(value, position, 1)
+          let cursor = cursor.char(model.cursor, char)
+          view
+          <> cursor.view(cursor)
+          <> string.slice(value, position + 1, string.length(value))
+        }
+        False -> {
+          let c = cursor.char(model.cursor, " ")
+          view <> cursor.view(c)
+        }
+      }
     }
   }
+}
+
+pub fn place_holder_view(model: Model) {
+  model.prompt <> cursor.view(model.cursor) <> model.place_holder
+}
+
+pub fn blink(model: Model) {
+  cursor.blink_event(model.cursor)
 }

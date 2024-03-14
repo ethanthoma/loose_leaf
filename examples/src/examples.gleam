@@ -13,24 +13,21 @@ fn initial_model() -> Model {
 }
 
 fn init(_) {
-  #(initial_model(), command.none())
+  let model = initial_model()
+  #(model, text_input.blink(model.text_input))
 }
 
 // handle error msgs if exist
 fn update(model: Model, event) {
   case event {
-    event.Key(key) ->
-      case key {
-        key.Enter | key.Ctrl(key.Char("c")) | key.Esc -> #(
-          model,
-          command.quit(),
-        )
-        _otherwise -> {
-          let #(text_input, _) = text_input.update(model.text_input, event)
-          #(Model(text_input: text_input), command.none())
-        }
-      }
-    _otherwise -> #(model, command.none())
+    event.Key(key.Enter) | event.Key(key.Char("c")) | event.Key(key.Esc) -> #(
+      model,
+      command.quit(),
+    )
+    _otherwise -> {
+      let #(text_input, command) = text_input.update(model.text_input, event)
+      #(Model(text_input: text_input), command)
+    }
   }
 }
 
