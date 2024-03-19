@@ -71,10 +71,20 @@ pub fn update(model: Model, event) {
   let model = case event {
     event.Key(key) ->
       case key {
-        key.Right -> character_forward(model)
-        key.Left -> character_backward(model)
-        key.Backspace -> delete_character_backward(model)
-        key.Delete -> delete_character_forward(model)
+        key.Right | key.Ctrl(key.Char("f")) -> character_forward(model)
+        key.Left | key.Ctrl(key.Char("b")) -> character_backward(model)
+        key.Alt(key.Right) | key.Ctrl(key.Right) | key.Alt(key.Char("f")) ->
+          model
+        key.Alt(key.Left) | key.Ctrl(key.Left) | key.Alt(key.Char("b")) -> model
+        key.Alt(key.Backspace) | key.Ctrl(key.Char("w")) -> model
+        key.Alt(key.Delete) | key.Alt(key.Char("d")) -> model
+        key.Ctrl(key.Char("k")) -> model
+        key.Ctrl(key.Char("u")) -> model
+        key.Backspace | key.Ctrl(key.Char("h")) ->
+          delete_character_backward(model)
+        key.Delete | key.Ctrl(key.Char("d")) -> delete_character_forward(model)
+        key.Home | key.Ctrl(key.Char("a")) -> model
+        key.End | key.Ctrl(key.Char("e")) -> model
         key.Space -> insert_characters(model, " ")
         key.Char(char) -> insert_characters(model, char)
         _otherwise -> model
