@@ -97,26 +97,59 @@ fn character_backward(model: Model) {
 }
 
 fn word_forward(model: Model) {
-  model
+  let position = model.position + 1
+
+  // merge white space
+  let position =
+    string.slice(model.value, position, string.length(model.value))
+    |> string.to_graphemes
+    |> list.fold_until(position, fn(acc, char) {
+      case char == " " {
+        False -> list.Stop(acc)
+        True -> list.Continue(acc + 1)
+      }
+    })
+
+  // offset to nearest white space
+  let position =
+    string.slice(model.value, position, string.length(model.value))
+    |> string.to_graphemes
+    |> list.fold_until(position, fn(acc, char) {
+      case char == " " {
+        True -> list.Stop(acc)
+        False -> list.Continue(acc + 1)
+      }
+    })
+
+  set_cursor(model, position)
 }
 
 fn word_backward(model: Model) {
   let position = model.position - 1
 
-  let value = string.slice(model.value, 0, position)
-
-  let offset =
-    value
+  // merge white space
+  let position =
+    string.slice(model.value, 0, position)
     |> string.reverse
     |> string.to_graphemes
-    |> list.fold_until(0, fn(acc, char) {
-      case char {
-        " " -> list.Stop(acc)
-        _ -> list.Continue(acc + 1)
+    |> list.fold_until(position, fn(acc, char) {
+      case char == " " {
+        False -> list.Stop(acc)
+        True -> list.Continue(acc - 1)
       }
     })
 
-  let position = position - offset
+  // offset to nearest white space
+  let position =
+    string.slice(model.value, 0, position)
+    |> string.reverse
+    |> string.to_graphemes
+    |> list.fold_until(position, fn(acc, char) {
+      case char == " " {
+        True -> list.Stop(acc)
+        False -> list.Continue(acc - 1)
+      }
+    })
 
   set_cursor(model, position)
 }
