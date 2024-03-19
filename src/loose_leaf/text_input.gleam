@@ -1,7 +1,6 @@
 import teashop/event
 import teashop/key
 import gleam/int
-import gleam/io
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/string
@@ -9,14 +8,14 @@ import loose_leaf/cursor
 
 pub type Model {
   Model(
-    prompt: String,
-    place_holder: Option(String),
-    cursor: cursor.Model,
     char_limit: Option(Int),
-    value: String,
-    focus: Bool,
-    position: Int,
+    cursor: cursor.Model,
     dimension: Option(Dimension),
+    focus: Bool,
+    place_holder: Option(String),
+    position: Int,
+    prompt: String,
+    value: String,
   )
 }
 
@@ -25,20 +24,33 @@ pub opaque type Dimension {
 }
 
 pub fn new() {
-  Model("> ", None, cursor.initial_model(), None, "", False, 0, None)
+  Model(
+    char_limit: None,
+    cursor: cursor.initial_model(),
+    dimension: None,
+    focus: False,
+    position: 0,
+    place_holder: None,
+    prompt: "> ",
+    value: "",
+  )
 }
 
-pub fn set_placeholder(model, place_holder: String) {
-  Model(..model, place_holder: Some(place_holder))
+pub fn blink(model: Model) {
+  cursor.blink_event(model.cursor)
+}
+
+fn set_cursor(model: Model, position) {
+  let position = int.clamp(position, 0, string.length(model.value))
+  handle_overflow(Model(..model, position: position))
 }
 
 pub fn set_focus(model, focus: Bool) {
   Model(..model, focus: focus)
 }
 
-pub fn set_width(model, width: Int) {
-  let dimension = Dimension(width, 0, width)
-  Model(..model, dimension: Some(dimension))
+pub fn set_placeholder(model, place_holder: String) {
+  Model(..model, place_holder: Some(place_holder))
 }
 
 pub fn set_value(model: Model, value: String) {
@@ -47,6 +59,11 @@ pub fn set_value(model: Model, value: String) {
     None -> string.length(value)
   }
   Model(..model, value: string.slice(value, 0, char_limit))
+}
+
+pub fn set_width(model, width: Int) {
+  let dimension = Dimension(width, 0, width)
+  Model(..model, dimension: Some(dimension))
 }
 
 pub fn update(model: Model, event) {
@@ -59,15 +76,17 @@ pub fn update(model: Model, event) {
           word_forward(model)
         key.Alt(key.Left) | key.Ctrl(key.Left) | key.Alt(key.Char("b")) ->
           word_backward(model)
-        key.Alt(key.Backspace) | key.Ctrl(key.Char("w")) -> model
-        key.Alt(key.Delete) | key.Alt(key.Char("d")) -> model
-        key.Ctrl(key.Char("k")) -> model
-        key.Ctrl(key.Char("u")) -> model
+        key.Alt(key.Backspace) | key.Ctrl(key.Char("w")) ->
+          delete_word_backward(model)
+        key.Alt(key.Delete) | key.Alt(key.Char("d")) ->
+          delete_word_forward(model)
+        key.Ctrl(key.Char("k")) -> delete_after_cursor(model)
+        key.Ctrl(key.Char("u")) -> delete_before_cursor(model)
         key.Backspace | key.Ctrl(key.Char("h")) ->
           delete_character_backward(model)
         key.Delete | key.Ctrl(key.Char("d")) -> delete_character_forward(model)
-        key.Home | key.Ctrl(key.Char("a")) -> model
-        key.End | key.Ctrl(key.Char("e")) -> model
+        key.Home | key.Ctrl(key.Char("a")) -> line_start(model)
+        key.End | key.Ctrl(key.Char("e")) -> line_end(model)
         key.Space -> insert_characters(model, " ")
         key.Char(char) -> insert_characters(model, char)
         _otherwise -> model
@@ -154,6 +173,43 @@ fn word_backward(model: Model) {
   set_cursor(model, position)
 }
 
+fn delete_word_backward(model: Model) {
+  let position = model.position
+
+  let model = word_backward(model)
+
+  let value =
+    string.slice(model.value, 0, model.position)
+    <> string.slice(model.value, position, string.length(model.value))
+
+  set_value(model, value)
+}
+
+fn delete_word_forward(model: Model) {
+  let position = model.position
+
+  let model = word_forward(model)
+
+  let value =
+    string.slice(model.value, 0, position)
+    <> string.slice(model.value, model.position, string.length(model.value))
+
+  set_value(model, value)
+}
+
+fn delete_after_cursor(model: Model) {
+  let value = string.slice(model.value, 0, model.position)
+  set_value(model, value)
+  |> set_cursor(string.length(value))
+}
+
+fn delete_before_cursor(model: Model) {
+  let value =
+    string.slice(model.value, model.position, string.length(model.value))
+  set_value(model, value)
+  |> set_cursor(0)
+}
+
 fn delete_character_forward(model: Model) {
   case
     string.length(model.value) > 0
@@ -190,6 +246,14 @@ fn delete_character_backward(model: Model) {
     }
     False -> model
   }
+}
+
+fn line_start(model: Model) {
+  set_cursor(model, 0)
+}
+
+fn line_end(model: Model) {
+  set_cursor(model, string.length(model.value))
 }
 
 fn insert_characters(model: Model, string) {
@@ -268,11 +332,6 @@ fn handle_overflow(model: Model) {
   }
 }
 
-fn set_cursor(model: Model, position) {
-  let position = int.clamp(position, 0, string.length(model.value))
-  handle_overflow(Model(..model, position: position))
-}
-
 pub fn view(model: Model) {
   case model.place_holder, string.length(model.value) == 0 {
     Some(_), True -> place_holder_view(model)
@@ -315,8 +374,4 @@ fn place_holder_view(model: Model) {
     True -> ""
     False -> string.slice(place_holder, 1, string.length(place_holder))
   }
-}
-
-pub fn blink(model: Model) {
-  cursor.blink_event(model.cursor)
 }
