@@ -3,13 +3,18 @@ import teashop/command
 import teashop/event
 import teashop/key
 import loose_leaf/text_input
+import gleam/io
 
 type Model {
   Model(text_input: text_input.Model)
 }
 
 fn initial_model() -> Model {
-  Model(text_input: text_input.new())
+  let text_input =
+    text_input.new()
+    |> text_input.set_placeholder("green tea")
+    |> text_input.set_focus(True)
+  Model(text_input: text_input)
 }
 
 fn init(_) {
@@ -25,6 +30,7 @@ fn update(model: Model, event) {
       command.quit(),
     )
     _otherwise -> {
+      io.debug(event)
       let #(text_input, command) = text_input.update(model.text_input, event)
       #(Model(text_input: text_input), command)
     }

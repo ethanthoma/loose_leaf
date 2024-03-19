@@ -2,7 +2,8 @@ import teashop/event
 import teashop/key
 import gleam/dict
 import gleam/int
-import gleam/result
+import gleam/list
+import gleam/option.{type Option, None, Some}
 import gleam/string
 import loose_leaf/cursor
 
@@ -27,47 +28,55 @@ fn default_key_map() -> KeyMap {
 pub type Model {
   Model(
     prompt: String,
-    place_holder: String,
+    place_holder: Option(String),
     cursor: cursor.Model,
-    char_limit: Int,
-    key_map: KeyMap,
+    char_limit: Option(Int),
     value: String,
+    focus: Bool,
     position: Int,
-    offset: Int,
-    offset_right: Int,
+    dimension: Option(Dimension),
   )
 }
 
+pub opaque type Dimension {
+  Dimension(width: Int, left_offset: Int, right_offset: Int)
+}
+
 pub fn new() {
-  Model(
-    "> ",
-    "green tea",
-    cursor.initial_model(),
-    0,
-    default_key_map(),
-    "",
-    0,
-    0,
-    0,
-  )
+  Model("> ", None, cursor.initial_model(), None, "", False, 0, None)
+}
+
+pub fn set_placeholder(model, place_holder: String) {
+  Model(..model, place_holder: Some(place_holder))
+}
+
+pub fn set_focus(model, focus: Bool) {
+  Model(..model, focus: focus)
+}
+
+pub fn set_width(model, width: Int) {
+  let dimension = Dimension(width, 0, width)
+  Model(..model, dimension: Some(dimension))
+}
+
+pub fn set_value(model: Model, value: String) {
+  let char_limit = case model.char_limit {
+    Some(char_limit) -> int.min(string.length(value), char_limit)
+    None -> string.length(value)
+  }
+  Model(..model, value: string.slice(value, 0, char_limit))
 }
 
 pub fn update(model: Model, event) {
   let model = case event {
     event.Key(key) ->
-      case result.unwrap(dict.get(model.key_map, key), "") {
-        "character_forward" -> character_forward(model)
-        "character_backward" -> character_backward(model)
-        "delete_character_backward" -> delete_character_backward(model)
-        "" -> {
-          let model = case key {
-            key.Char(char) -> {
-              insert_character(model, char)
-            }
-            _otherwise -> model
-          }
-          model
-        }
+      case key {
+        key.Right -> character_forward(model)
+        key.Left -> character_backward(model)
+        key.Backspace -> delete_character_backward(model)
+        key.Delete -> delete_character_forward(model)
+        key.Space -> insert_characters(model, " ")
+        key.Char(char) -> insert_characters(model, char)
         _otherwise -> model
       }
     _otherwise -> model
@@ -94,12 +103,34 @@ fn character_backward(model: Model) {
   }
 }
 
-fn delete_character_backward(model: Model) {
-  case string.length(model.value) > 0 {
+fn delete_character_forward(model: Model) {
+  case
+    string.length(model.value) > 0
+    && model.position < string.length(model.value)
+  {
     True -> {
       let value =
-        string.slice(model.value, 0, int.max(0, model.position - 1))
-        <> string.slice(model.value, model.position, string.length(model.value))
+        string.slice(model.value, 0, model.position)
+        <> string.slice(
+          model.value,
+          model.position + 1,
+          string.length(model.value),
+        )
+
+      Model(..model, value: value)
+    }
+    False -> model
+  }
+}
+
+fn delete_character_backward(model: Model) {
+  let value = model.value
+  let value_length = string.length(value)
+  case value_length > 0 {
+    True -> {
+      let value =
+        string.slice(value, 0, int.max(0, model.position - 1))
+        <> string.slice(value, model.position, value_length)
       let model = Model(..model, value: value)
       case model.position > 0 {
         True -> set_cursor(model, model.position - 1)
@@ -110,16 +141,74 @@ fn delete_character_backward(model: Model) {
   }
 }
 
-fn insert_character(model: Model, char) {
+fn insert_characters(model: Model, string) {
+  let chars = string.to_graphemes(string)
+
+  let chars = case model.char_limit {
+    Some(char_limit) -> {
+      let available_space = char_limit - string.length(model.value)
+      let chars_length = list.length(chars)
+      case available_space {
+        available_space if available_space <= 0 -> []
+        available_space if available_space < chars_length -> {
+          let #(chars, _) = list.split(chars, available_space)
+          chars
+        }
+        _ -> chars
+      }
+    }
+    None -> chars
+  }
+
   let head = string.slice(model.value, 0, model.position)
   let tail =
     string.slice(model.value, model.position, string.length(model.value))
-  let value = head <> char <> tail
-  character_forward(Model(..model, value: value))
+  let value = head <> string.join(chars, "") <> tail
+  character_forward(
+    Model(..model, value: value, position: model.position + list.length(chars)),
+  )
 }
 
 fn handle_overflow(model: Model) {
-  Model(..model, offset: 0, offset_right: string.length(model.value))
+  case model.dimension {
+    Some(dimension) -> {
+      let left_offset = dimension.left_offset
+      let right_offset = dimension.right_offset
+
+      let #(left_offset, right_offset) = case model.position {
+        position if position < left_offset -> {
+          let left_offset = model.position
+          let value_length = int.min(right_offset, string.length(model.value))
+          let i = int.min(value_length - left_offset, dimension.width)
+
+          #(left_offset, left_offset + i)
+        }
+        position if position >= right_offset -> {
+          let right_offset = model.position
+          let value_length = int.min(right_offset, string.length(model.value))
+          let i = int.max(value_length - dimension.width - 1, 0)
+
+          #(right_offset - { value_length - 1 - i }, right_offset)
+        }
+        _ -> {
+          let right_offset =
+            right_offset
+            |> int.min(string.length(model.value))
+
+          #(left_offset, right_offset)
+        }
+      }
+
+      let dimension =
+        Dimension(
+          ..dimension,
+          left_offset: left_offset,
+          right_offset: right_offset,
+        )
+      Model(..model, dimension: Some(dimension))
+    }
+    None -> model
+  }
 }
 
 fn set_cursor(model: Model, position) {
@@ -128,11 +217,16 @@ fn set_cursor(model: Model, position) {
 }
 
 pub fn view(model: Model) {
-  case string.length(model.value) == 0 && model.place_holder != "" {
-    True -> place_holder_view(model)
-    False -> {
-      let value = string.slice(model.value, model.offset, model.offset_right)
-      let position = int.max(0, model.position - model.offset)
+  case model.place_holder, string.length(model.value) == 0 {
+    Some(_), True -> place_holder_view(model)
+    _, _ -> {
+      let #(left_offset, right_offset) = case model.dimension {
+        Some(dimension) -> #(dimension.left_offset, dimension.right_offset)
+        None -> #(0, string.length(model.value))
+      }
+      let value = string.slice(model.value, left_offset, right_offset)
+      let position = int.max(0, model.position - left_offset)
+
       let view = string.slice(value, 0, position)
 
       model.prompt
@@ -153,8 +247,17 @@ pub fn view(model: Model) {
   }
 }
 
-pub fn place_holder_view(model: Model) {
-  model.prompt <> cursor.view(model.cursor) <> model.place_holder
+fn place_holder_view(model: Model) {
+  let assert Some(place_holder) = model.place_holder
+  let cursor =
+    model.cursor
+    |> cursor.char(string.slice(place_holder, 0, 1))
+  model.prompt
+  <> cursor.view(cursor)
+  <> case string.length(place_holder) <= 1 {
+    True -> ""
+    False -> string.slice(place_holder, 1, string.length(place_holder))
+  }
 }
 
 pub fn blink(model: Model) {

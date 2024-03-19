@@ -2,6 +2,12 @@ import teashop/command
 import teashop/duration
 import teashop/event
 
+type BlinkState {
+  Initial(String)
+  Msg(String)
+  Canceled(String)
+}
+
 pub type Model {
   Model(
     style: String,
@@ -14,7 +20,7 @@ pub type Model {
 }
 
 pub fn initial_model() {
-  Model("|", " ", True, True, True, duration.milliseconds(600))
+  Model("█", " ", True, True, True, duration.milliseconds(600))
 }
 
 pub fn style(model, style) {
