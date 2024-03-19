@@ -25,10 +25,9 @@ fn init(_) {
 // handle error msgs if exist
 fn update(model: Model, event) {
   case event {
-    event.Key(key.Enter) | event.Key(key.Char("c")) | event.Key(key.Esc) -> #(
-      model,
-      command.quit(),
-    )
+    event.Key(key.Enter)
+    | event.Key(key.Ctrl(key.Char("c")))
+    | event.Key(key.Esc) -> #(model, command.quit())
     _otherwise -> {
       io.debug(event)
       let #(text_input, command) = text_input.update(model.text_input, event)

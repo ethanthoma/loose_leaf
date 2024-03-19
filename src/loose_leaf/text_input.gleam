@@ -1,29 +1,11 @@
 import teashop/event
 import teashop/key
-import gleam/dict
 import gleam/int
+import gleam/io
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/string
 import loose_leaf/cursor
-
-type KeyMap =
-  dict.Dict(key.Key, String)
-
-fn default_key_map() -> KeyMap {
-  dict.from_list([
-    #(key.Right, "character_forward"),
-    #(key.Left, "character_backward"),
-    #(key.Ctrl(key.Right), "word_forward"),
-    #(key.Ctrl(key.Left), "word_backward"),
-    #(key.Ctrl(key.Char("k")), "delete_after_cursor"),
-    #(key.Ctrl(key.Char("u")), "delete_before_cursor"),
-    #(key.Backspace, "delete_character_backward"),
-    #(key.Delete, "delete_character_forward"),
-    #(key.Ctrl(key.Char("a")), "line_start"),
-    #(key.Ctrl(key.Char("e")), "line_end"),
-  ])
-}
 
 pub type Model {
   Model(
@@ -74,8 +56,9 @@ pub fn update(model: Model, event) {
         key.Right | key.Ctrl(key.Char("f")) -> character_forward(model)
         key.Left | key.Ctrl(key.Char("b")) -> character_backward(model)
         key.Alt(key.Right) | key.Ctrl(key.Right) | key.Alt(key.Char("f")) ->
-          model
-        key.Alt(key.Left) | key.Ctrl(key.Left) | key.Alt(key.Char("b")) -> model
+          word_forward(model)
+        key.Alt(key.Left) | key.Ctrl(key.Left) | key.Alt(key.Char("b")) ->
+          word_backward(model)
         key.Alt(key.Backspace) | key.Ctrl(key.Char("w")) -> model
         key.Alt(key.Delete) | key.Alt(key.Char("d")) -> model
         key.Ctrl(key.Char("k")) -> model
@@ -111,6 +94,31 @@ fn character_backward(model: Model) {
     True -> set_cursor(model, model.position - 1)
     False -> model
   }
+}
+
+fn word_forward(model: Model) {
+  model
+}
+
+fn word_backward(model: Model) {
+  let position = model.position - 1
+
+  let value = string.slice(model.value, 0, position)
+
+  let offset =
+    value
+    |> string.reverse
+    |> string.to_graphemes
+    |> list.fold_until(0, fn(acc, char) {
+      case char {
+        " " -> list.Stop(acc)
+        _ -> list.Continue(acc + 1)
+      }
+    })
+
+  let position = position - offset
+
+  set_cursor(model, position)
 }
 
 fn delete_character_forward(model: Model) {
@@ -175,7 +183,13 @@ fn insert_characters(model: Model, string) {
     string.slice(model.value, model.position, string.length(model.value))
   let value = head <> string.join(chars, "") <> tail
   character_forward(
-    Model(..model, value: value, position: model.position + list.length(chars)),
+    Model(
+      ..model,
+      value: value,
+      position: model.position
+      + list.length(chars)
+      - 1,
+    ),
   )
 }
 
