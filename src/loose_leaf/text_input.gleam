@@ -1,3 +1,4 @@
+import teashop/command
 import teashop/event
 import teashop/key
 import gleam/int
@@ -37,7 +38,7 @@ pub fn new() {
 }
 
 pub fn blink(model: Model) {
-  cursor.blink_event(model.cursor)
+  cursor.start_blink(model.cursor)
 }
 
 fn set_cursor(model: Model, position) {
@@ -67,6 +68,8 @@ pub fn set_width(model, width: Int) {
 }
 
 pub fn update(model: Model, event) {
+  let original_position = model.position
+
   let model = case event {
     event.Key(key) ->
       case key {
@@ -94,11 +97,26 @@ pub fn update(model: Model, event) {
     _otherwise -> model
   }
 
-  let #(cursor, command) = cursor.update(model.cursor, event)
-  let model = Model(..model, cursor: cursor)
+  let commands = []
+
+  // update cursor
+  let #(cur, cmd) = cursor.update(model.cursor, event)
+  let commands = list.prepend(commands, cmd)
+
+  // reset blink if cursor moved
+  let #(cur, cmd) = case original_position != model.position {
+    True -> {
+      let cur = cursor.blink(cur, False)
+      cursor.blink_command(cur)
+    }
+    False -> #(cur, command.none())
+  }
+  let commands = list.prepend(commands, cmd)
+
+  let model = Model(..model, cursor: cur)
   let model = handle_overflow(model)
 
-  #(model, command)
+  #(model, command.sequence(commands))
 }
 
 fn character_forward(model: Model) {
