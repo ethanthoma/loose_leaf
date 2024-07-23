@@ -287,7 +287,7 @@ fn insert_characters(model: Model, string) {
           let #(chars, _) = list.split(chars, available_space)
           chars
         }
-        _ -> chars
+        _otherwise -> chars
       }
     }
     None -> chars
@@ -329,7 +329,7 @@ fn handle_overflow(model: Model) {
 
           #(right_offset - { value_length - 1 - i }, right_offset)
         }
-        _ -> {
+        _otherwise -> {
           let right_offset =
             right_offset
             |> int.min(string.length(model.value))
@@ -353,7 +353,7 @@ fn handle_overflow(model: Model) {
 pub fn view(model: Model) {
   case model.place_holder, string.length(model.value) == 0 {
     Some(_), True -> place_holder_view(model)
-    _, _ -> {
+    _otherwise, _otherwise -> {
       let #(left_offset, right_offset) = case model.dimension {
         Some(dimension) -> #(dimension.left_offset, dimension.right_offset)
         None -> #(0, string.length(model.value))

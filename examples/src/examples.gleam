@@ -3,7 +3,6 @@ import teashop/command
 import teashop/event
 import teashop/key
 import loose_leaf/text_input
-import gleam/io
 
 type Model {
   Model(text_input: text_input.Model)
@@ -19,17 +18,20 @@ fn initial_model() -> Model {
 
 fn init(_) {
   let model = initial_model()
-  #(model, text_input.blink(model.text_input))
+  let command =
+    model.text_input
+    |> text_input.blink
+  #(model, command)
 }
 
-// handle error msgs if exist
 fn update(model: Model, event) {
   case event {
     event.Key(key.Enter)
     | event.Key(key.Ctrl(key.Char("c")))
-    | event.Key(key.Esc) -> #(model, command.quit())
+    | event.Key(key.Esc) -> {
+      #(model, command.quit())
+    }
     _otherwise -> {
-      io.debug(event)
       let #(text_input, command) = text_input.update(model.text_input, event)
       #(Model(text_input: text_input), command)
     }

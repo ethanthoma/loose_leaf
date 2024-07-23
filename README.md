@@ -1,12 +1,14 @@
 # loose_leaf
 
-Like bubbles for bubbletea but for teashop
+Like bubbles for bubbletea but for [teashop](https://github.com/erikareads/teashop)!
 
 ## TODO
 
-- implement cursor MVP
-- implement text_input MVP
-- flesh out both
+- fully implement text_input for width and char limit
+
+## How-to
+
+Check the examples folder on how to use the components implemented thus far!
 
 ## Development
 

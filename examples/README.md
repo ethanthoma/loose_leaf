@@ -1,10 +1,8 @@
 # examples
 
-[![Package Version](https://img.shields.io/hexpm/v/examples)](https://hex.pm/packages/examples)
-[![Hex Docs](https://img.shields.io/badge/hex-docs-ffaff3)](https://hexdocs.pm/examples/)
-
 ```sh
-gleam add examples
+gleam add teashop
+gleam add looseleaf
 ```
 ```gleam
 import examples
